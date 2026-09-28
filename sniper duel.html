@@ -235,39 +235,8 @@ buildingDefs.forEach(b=>{
   mesh.userData.type = 'building';
   scene.add(mesh);
   buildingMeshes.push(mesh);
-  buildingAABB.push({minX:b.x-b.w/2, maxX:b.x+b.w/2, minZ:b.z-b.d/2, maxZ:b.z+b.d/2, top:b.h});
+  buildingAABB.push({minX:b.x-b.w/2, maxX:b.x+b.w/2, minZ:b.z-b.d/2, maxZ:b.z+b.d/2});
 });
-
-/* ============================================================
-   Climbable structures (towers & jump crates) - solid, steppable
-   ============================================================ */
-const climbDefs = [
-  {x:-18,   z:0, w:1.6, d:1.6, top:0.9},
-  {x:-19.6, z:0, w:1.6, d:1.6, top:1.8},
-  {x:-21.4, z:0, w:3.0, d:3.0, top:2.7},
-
-  {x: 18,   z:0, w:1.6, d:1.6, top:0.9},
-  {x: 19.6, z:0, w:1.6, d:1.6, top:1.8},
-  {x: 21.4, z:0, w:3.0, d:3.0, top:2.7},
-
-  {x:-4, z: 4, w:1.3, d:1.3, top:1.0},
-  {x: 4, z: 4, w:1.3, d:1.3, top:1.0},
-  {x:-4, z:-4, w:1.3, d:1.3, top:1.0},
-  {x: 4, z:-4, w:1.3, d:1.3, top:1.0}
-];
-const climbAABB = [];
-const climbMeshes = [];
-climbDefs.forEach(c=>{
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.top, c.d), new THREE.MeshLambertMaterial({color:0x7a5a35}));
-  mesh.position.set(c.x, c.top/2, c.z);
-  mesh.userData.type = 'climb';
-  scene.add(mesh);
-  climbMeshes.push(mesh);
-  climbAABB.push({minX:c.x-c.w/2, maxX:c.x+c.w/2, minZ:c.z-c.d/2, maxZ:c.z+c.d/2, top:c.top});
-});
-
-const allSolidAABB = buildingAABB.concat(climbAABB);
-const allSolidMeshes = buildingMeshes.concat(climbMeshes);
 
 /* ============================================================
    Ammo crates (mirrored pairs for fairness)
@@ -283,9 +252,7 @@ const crates = crateDefs.map(c=>{
 /* ============================================================
    Player state
    ============================================================ */
-const player = { pos:new THREE.Vector3(0,0,30), yaw:0, pitch:0, health:100, radius:0.4, eyeHeight:1.65, velY:0, grounded:true };
-const GRAVITY = -24;
-const JUMP_SPEED = 7.2;
+const player = { pos:new THREE.Vector3(0,0,30), yaw:0, pitch:0, health:100, radius:0.4, eyeHeight:1.65 };
 
 let mag=5, magSize=5, reserve=40, reserveMax=80;
 let reloading=false, isAiming=false;
@@ -374,164 +341,10 @@ function lerpAngle(a,b,t){
 function updateOpponentAvatar(dt){
   const alpha = Math.min(1, dt*12);
   opponent.group.position.x += (opponent.targetPos.x - opponent.group.position.x)*alpha;
-  opponent.group.position.y += (opponent.targetPos.y - opponent.group.position.y)*alpha;
   opponent.group.position.z += (opponent.targetPos.z - opponent.group.position.z)*alpha;
   opponent.renderYaw = lerpAngle(opponent.renderYaw, opponent.targetYaw, alpha);
   opponent.group.rotation.y = opponent.renderYaw;
   opponent.group.visible = opponent.aliveRemote;
-}
-
-/* ============================================================
-   1:1 AI bot (full player-equivalent: moves, jumps, climbs, aims, reloads)
-   ============================================================ */
-const botMagSize = 5;
-const bot = (function(){
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,1.15,0.4), new THREE.MeshLambertMaterial({color:0x8a3f3f}));
-  body.position.y = 0.87;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3,12,10), new THREE.MeshLambertMaterial({color:0xd8b48c}));
-  head.position.y = 1.72;
-  group.add(body, head);
-  group.visible = false;
-  scene.add(group);
-  body.userData = {type:'botBody'};
-  head.userData = {type:'botHead'};
-  return {
-    group, body, head,
-    pos:new THREE.Vector3(0,0,-30), velY:0, grounded:true,
-    health:100, mag:botMagSize, reserve:200, reloading:false, reloadTimer:0,
-    fireTimer:2, decisionTimer:1, state:'patrol',
-    target:{x:0,z:-30,y:0}, climbChain:null, climbIndex:0,
-    facingYaw:0, alive:true
-  };
-})();
-
-const groundWaypoints = [
-  {x:-14,z:-6,y:0},{x:14,z:-6,y:0},{x:-9,z:-16,y:0},{x:9,z:-16,y:0},{x:-24,z:-11,y:0},{x:24,z:-11,y:0},
-  {x:-14,z: 6,y:0},{x:14,z: 6,y:0},{x:-9,z: 16,y:0},{x:9,z: 16,y:0},{x:-24,z: 11,y:0},{x:24,z: 11,y:0},
-  {x:-4,z:4,y:1.0},{x:4,z:4,y:1.0},{x:-4,z:-4,y:1.0},{x:4,z:-4,y:1.0},
-  {x:0,z:-2,y:0},{x:0,z:2,y:0}
-];
-const westChain = [{x:-18,z:3,y:0},{x:-18,z:0,y:0.9},{x:-19.6,z:0,y:1.8},{x:-21.4,z:0,y:2.7}];
-const eastChain = [{x: 18,z:3,y:0},{x: 18,z:0,y:0.9},{x: 19.6,z:0,y:1.8},{x: 21.4,z:0,y:2.7}];
-
-function chooseBotTarget(){
-  if(Math.random() < 0.22){
-    bot.climbChain = Math.random()<0.5 ? westChain : eastChain;
-    bot.climbIndex = 0;
-    bot.state = 'climbing';
-    bot.decisionTimer = 99;
-  } else {
-    bot.target = groundWaypoints[Math.floor(Math.random()*groundWaypoints.length)];
-    bot.state = 'patrol';
-    bot.decisionTimer = 3 + Math.random()*3;
-  }
-}
-
-function updateBotMovement(dt, target){
-  const dx = target.x - bot.pos.x, dz = target.z - bot.pos.z;
-  const dist = Math.sqrt(dx*dx + dz*dz);
-  if(dist > 0.4){
-    const spd = 3.6;
-    const nx = bot.pos.x + (dx/dist)*spd*dt;
-    const nz = bot.pos.z + (dz/dist)*spd*dt;
-    if(!collides(nx, bot.pos.z, bot.pos.y)) bot.pos.x = nx;
-    if(!collides(bot.pos.x, nz, bot.pos.y)) bot.pos.z = nz;
-    bot.facingYaw = Math.atan2(-dx, -dz);
-  }
-  return dist;
-}
-
-function updateBot(dt){
-  if(!bot.alive) return;
-  bot.decisionTimer -= dt;
-
-  if(bot.state === 'climbing'){
-    const cp = bot.climbChain[bot.climbIndex];
-    const hdist = updateBotMovement(dt, cp);
-    if(bot.grounded && cp.y > bot.pos.y + 0.3 && hdist < 2.4){ bot.velY = JUMP_SPEED; bot.grounded = false; }
-    if(hdist < 0.6 && Math.abs(bot.pos.y - cp.y) < 0.35){
-      bot.climbIndex++;
-      if(bot.climbIndex >= bot.climbChain.length){ bot.state = 'hold'; bot.decisionTimer = 5 + Math.random()*4; }
-    }
-  } else if(bot.state === 'hold'){
-    if(bot.decisionTimer <= 0){ chooseBotTarget(); }
-  } else {
-    if(bot.decisionTimer <= 0 || !bot.target){ chooseBotTarget(); }
-    const hdist = updateBotMovement(dt, bot.target);
-    if(bot.grounded && bot.target.y > bot.pos.y + 0.3 && hdist < 2.4){ bot.velY = JUMP_SPEED; bot.grounded = false; }
-  }
-
-  resolveVerticalGeneric(bot, dt);
-  bot.group.position.set(bot.pos.x, bot.pos.y, bot.pos.z);
-  bot.group.rotation.y = bot.facingYaw;
-
-  updateBotCombat(dt);
-}
-
-function updateBotCombat(dt){
-  if(!bot.alive) return;
-  const headPos = bot.head.getWorldPosition(new THREE.Vector3());
-  const playerHead = camera.getWorldPosition(new THREE.Vector3());
-  const dist = headPos.distanceTo(playerHead);
-  const hasLOS = dist < 70 && !isBlockedByBuildings(headPos, playerHead);
-
-  if(bot.reloading){
-    bot.reloadTimer -= dt;
-    if(bot.reloadTimer <= 0){ bot.mag = botMagSize; bot.reloading = false; }
-    return;
-  }
-
-  if(hasLOS){
-    const dx = playerHead.x - bot.pos.x, dz = playerHead.z - bot.pos.z;
-    bot.group.rotation.y = Math.atan2(-dx, -dz);
-
-    bot.fireTimer -= dt;
-    if(bot.fireTimer <= 0){
-      bot.fireTimer = 1.1 + Math.random()*0.9;
-      if(bot.mag <= 0){
-        bot.reloading = true; bot.reloadTimer = 1.3;
-      } else {
-        bot.mag--;
-        spawnTracer(headPos, playerHead, 0xff3b3b);
-        const roll = Math.random();
-        if(roll < 0.12){ applyIncomingHit(true, 100); }
-        else if(roll < 0.42){ applyIncomingHit(false, 32); }
-      }
-    }
-  }
-}
-
-function botTakeDamage(dmg, headshot){
-  if(!bot.alive) return;
-  bot.health -= dmg;
-  flashHitmarker();
-  if(headshot) flashHeadshot();
-  score += headshot ? 100 : 10;
-  updateHUD();
-  updateBotHUD();
-  if(bot.health <= 0){ botDie(); }
-}
-
-function botDie(){
-  if(!bot.alive) return;
-  bot.alive = false;
-  bot.group.visible = false;
-  kills++;
-  score += 50;
-  updateHUD();
-  updateBotHUD();
-  if(!matchEndedLocally){
-    matchEndedLocally = true;
-    gameState = 'victory';
-    document.exitPointerLock && document.exitPointerLock();
-    showVsBotResult(true);
-  }
-}
-
-function updateBotHUD(){
-  el('oppHealthBarInner').style.width = Math.max(0, bot.health) + '%';
-  el('oppHealthNum').textContent = Math.max(0, Math.round(bot.health));
 }
 
 /* ============================================================
@@ -540,7 +353,7 @@ function updateBotHUD(){
 const raycaster = new THREE.Raycaster();
 function getAITargets(){
   const arr = [ground];
-  allSolidMeshes.forEach(m=>arr.push(m));
+  buildingMeshes.forEach(m=>arr.push(m));
   enemies.forEach(e=>{ if(e.alive){ arr.push(e.head, e.body); } });
   return arr;
 }
@@ -550,7 +363,7 @@ function isBlockedByBuildings(fromV, toV){
   dir.normalize();
   raycaster.set(fromV, dir);
   raycaster.far = Math.max(0.01, dist - 0.3);
-  return raycaster.intersectObjects(allSolidMeshes, false).length > 0;
+  return raycaster.intersectObjects(buildingMeshes, false).length > 0;
 }
 
 /* ============================================================
@@ -602,11 +415,7 @@ function showPickupMsg(text){ const p=el('pickupMsg'); p.textContent=text; p.cla
    Input
    ============================================================ */
 const keys = {};
-window.addEventListener('keydown', e=>{
-  keys[e.code]=true;
-  if(e.code==='KeyR') tryReload();
-  if(e.code==='Space' && gameState==='playing'){ e.preventDefault(); tryJump(); }
-});
+window.addEventListener('keydown', e=>{ keys[e.code]=true; if(e.code==='KeyR') tryReload(); });
 window.addEventListener('keyup', e=>{ keys[e.code]=false; });
 document.body.addEventListener('contextmenu', e=>e.preventDefault());
 
@@ -662,11 +471,8 @@ function shoot(){
 
   let targets;
   if(mode==='pvp'){
-    targets = [ground].concat(allSolidMeshes);
+    targets = [ground].concat(buildingMeshes);
     if(opponent.aliveRemote) targets.push(opponent.head, opponent.body);
-  } else if(mode==='vsbot'){
-    targets = [ground].concat(allSolidMeshes);
-    if(bot.alive) targets.push(bot.head, bot.body);
   } else {
     targets = getAITargets();
   }
@@ -683,9 +489,6 @@ function shoot(){
     if(mode==='pvp'){
       if(type==='oppHead'){ sendMsg({t:'hit', headshot:true, dmg:100}); flashHitmarker(); flashHeadshot(); score+=100; tracerColor=0xff5544; }
       else if(type==='oppBody'){ sendMsg({t:'hit', headshot:false, dmg:40}); flashHitmarker(); score+=10; tracerColor=0xff5544; }
-    } else if(mode==='vsbot'){
-      if(type==='botHead'){ botTakeDamage(100,true); tracerColor=0xff5544; }
-      else if(type==='botBody'){ botTakeDamage(40,false); tracerColor=0xff5544; }
     } else {
       if(type==='enemyHead'){
         const enemy = enemies.find(e=>e.id===hit.object.userData.id && e.alive);
@@ -808,11 +611,9 @@ function updateCrates(dt){
 /* ============================================================
    Movement & collision
    ============================================================ */
-function collides(x,z,y){
-  for(const s of allSolidAABB){
-    if(y < s.top - 0.12){
-      if(x+player.radius>s.minX && x-player.radius<s.maxX && z+player.radius>s.minZ && z-player.radius<s.maxZ) return true;
-    }
+function collides(x,z){
+  for(const b of buildingAABB){
+    if(x+player.radius>b.minX && x-player.radius<b.maxX && z+player.radius>b.minZ && z-player.radius<b.maxZ) return true;
   }
   return false;
 }
@@ -832,40 +633,9 @@ function updateMovement(dt){
   const nx = player.pos.x + worldX*speed*dt;
   const nz = player.pos.z + worldZ*speed*dt;
   const bound = 40;
-  if(!collides(nx, player.pos.z, player.pos.y) && Math.abs(nx)<bound) player.pos.x = nx;
-  if(!collides(player.pos.x, nz, player.pos.y) && Math.abs(nz)<bound) player.pos.z = nz;
+  if(!collides(nx, player.pos.z) && Math.abs(nx)<bound) player.pos.x = nx;
+  if(!collides(player.pos.x, nz) && Math.abs(nz)<bound) player.pos.z = nz;
 }
-
-function tryJump(){
-  if(player.grounded){ player.velY = JUMP_SPEED; player.grounded = false; }
-}
-
-function resolveVerticalGeneric(entity, dt){
-  const prevY = entity.pos.y;
-  entity.velY += GRAVITY*dt;
-  const newY = prevY + entity.velY*dt;
-
-  let supportTop = 0;
-  let onSupport = (newY <= 0 && prevY >= -0.06);
-
-  for(const s of allSolidAABB){
-    if(entity.pos.x > s.minX && entity.pos.x < s.maxX && entity.pos.z > s.minZ && entity.pos.z < s.maxZ){
-      if(prevY >= s.top - 0.06 && newY <= s.top){
-        if(!onSupport || s.top > supportTop){ supportTop = s.top; onSupport = true; }
-      }
-    }
-  }
-
-  if(onSupport){
-    entity.pos.y = supportTop;
-    entity.velY = 0;
-    entity.grounded = true;
-  } else {
-    entity.pos.y = newY;
-    entity.grounded = false;
-  }
-}
-function resolveVertical(dt){ resolveVerticalGeneric(player, dt); }
 
 /* ============================================================
    WebRTC networking (code-based manual signaling, no server)
@@ -959,7 +729,7 @@ async function guestCreateAnswer(offerCode){
 
 function handleMsg(msg){
   if(msg.t==='state'){
-    opponent.targetPos.set(msg.x, msg.y||0, msg.z);
+    opponent.targetPos.set(msg.x, 0, msg.z);
     opponent.targetYaw = msg.yaw;
     opponent.knownHp = Math.max(0, msg.hp);
     opponent.aliveRemote = msg.alive;
@@ -1005,7 +775,7 @@ function onDisconnected(){
 }
 
 function sendState(){
-  sendMsg({t:'state', x:player.pos.x, y:player.pos.y, z:player.pos.z, yaw:player.yaw, hp:player.health, alive:player.health>0});
+  sendMsg({t:'state', x:player.pos.x, z:player.pos.z, yaw:player.yaw, hp:player.health, alive:player.health>0});
 }
 
 /* ============================================================
@@ -1017,7 +787,6 @@ function startMatchNow(){
   el('scope').classList.remove('active'); el('crosshair').classList.remove('hidden');
   player.pos.set(0,0, isHost?30:-30);
   player.yaw = isHost?0:Math.PI; player.pitch=0;
-  player.velY=0; player.grounded=true;
   crates.forEach(c=>{ c.active=true; c.mesh.visible=true; c.cooldown=0; });
 
   const oppSpawnZ = isHost? -30:30;
@@ -1026,7 +795,6 @@ function startMatchNow(){
   opponent.group.position.set(0,0,oppSpawnZ); opponent.group.rotation.y=oppSpawnYaw;
   opponent.group.visible=true; opponent.aliveRemote=true; opponent.knownHp=100;
 
-  el('oppHealthLabel').textContent = '상대 체력 (추정)';
   el('waitMsg').style.display='none';
   blocker.classList.add('hidden');
   gameState='playing';
@@ -1043,7 +811,6 @@ function onPlayerDeath(){
   gameState='dead';
   document.exitPointerLock && document.exitPointerLock();
   if(mode==='pvp'){ showResultScreen(false); }
-  else if(mode==='vsbot'){ showVsBotResult(false); }
   else { showAIDeathScreen(); }
 }
 
@@ -1078,46 +845,6 @@ function showResultScreen(won){
   el('toMenuLink').addEventListener('click', ()=>location.reload());
 }
 
-function showVsBotResult(won){
-  blocker.classList.remove('hidden');
-  blocker.innerHTML =
-    '<div class="card">'+
-      '<h1>'+(won?'승리!':'패배')+'</h1>'+
-      '<div class="sub">'+(won?'AI를 제압했습니다':'AI에게 당했습니다')+'</div>'+
-      '<div class="resultStat">점수: <b>'+score+'</b></div>'+
-      '<button class="btn" id="vsbotRestartBtn">다시 대결</button>'+
-      '<span class="backLink" id="toMenuLink3">메인 메뉴로 나가기</span>'+
-    '</div>';
-  el('vsbotRestartBtn').addEventListener('click', startVsBotMatch);
-  el('toMenuLink3').addEventListener('click', ()=>location.reload());
-}
-
-function startVsBotMatch(){
-  mode = 'vsbot';
-  matchEndedLocally = false;
-  player.health=100; player.pos.set(0,0,30); player.yaw=0; player.pitch=0;
-  player.velY=0; player.grounded=true;
-  mag=magSize; reserve=40; reloading=false; isAiming=false;
-  el('scope').classList.remove('active'); el('crosshair').classList.remove('hidden');
-  score=0; kills=0;
-  crates.forEach(c=>{ c.active=true; c.mesh.visible=true; c.cooldown=0; });
-
-  bot.health=100; bot.mag=botMagSize; bot.reserve=200; bot.reloading=false;
-  bot.pos.set(0,0,-30); bot.velY=0; bot.grounded=true; bot.alive=true;
-  bot.group.visible=true; bot.group.position.set(0,0,-30);
-  bot.state='patrol'; bot.target={x:0,z:-30,y:0}; bot.climbChain=null; bot.climbIndex=0;
-  bot.decisionTimer=1.5; bot.fireTimer=2.5;
-
-  el('oppHealthLabel').textContent = 'AI 체력';
-  el('oppHealthBox').style.display='block';
-  el('waveBox').style.display='none';
-
-  updateHUD(); updateBotHUD();
-  blocker.classList.add('hidden');
-  gameState='playing';
-  requestLock();
-}
-
 function showAIDeathScreen(){
   blocker.classList.remove('hidden');
   blocker.innerHTML =
@@ -1146,7 +873,6 @@ function showPauseScreen(){
 function resetAIGame(){
   mode='ai';
   player.health=100; player.pos.set(0,0,30); player.yaw=0; player.pitch=0;
-  player.velY=0; player.grounded=true;
   mag=magSize; reserve=40; reloading=false; isAiming=false;
   score=0; kills=0; wave=1; matchEndedLocally=false;
   crates.forEach(c=>{ c.active=true; c.mesh.visible=true; c.cooldown=0; });
@@ -1169,20 +895,17 @@ function showMainMenu(){
       '<div class="sub">엄폐 저격 대결 게임</div>'+
       '<div class="rules">'+
         '<b>WASD</b> 이동 · <b>마우스</b> 시점 회전<br>'+
-        '<b>좌클릭</b> 발사 · <b>우클릭(누르기)</b> 스코프 조준 · <b>R</b> 재장전 · <b>스페이스바</b> 점프<br>'+
-        '<b>헤드샷</b>은 즉사, 몸통은 여러 발이 필요합니다.<br>'+
-        '갈색 구조물(계단탑, 상자)은 점프해서 올라갈 수 있는 고지대예요.<br><br>'+
+        '<b>좌클릭</b> 발사 · <b>우클릭(누르기)</b> 스코프 조준 · <b>R</b> 재장전<br>'+
+        '<b>헤드샷</b>은 즉사, 몸통은 여러 발이 필요합니다.<br><br>'+
         '<b>대결(PvP)</b>은 서버 없이 친구와 1:1로 직접 연결하는 방식이라, '+
         '접속 코드를 서로 복사해서 대화방 등으로 주고받아야 해요. '+
         '네트워크 환경에 따라 연결이 안 될 수도 있습니다.'+
       '</div>'+
-      '<button class="btn" id="aiBtn">AI 웨이브 생존 (연습)</button>'+
-      '<button class="btn" id="vsbotBtn">AI와 1:1 대결 (나와 동일한 능력)</button>'+
+      '<button class="btn" id="aiBtn">AI와 연습 (싱글)</button>'+
       '<button class="btn secondary" id="hostBtn">방 만들기 (호스트)</button>'+
       '<button class="btn secondary" id="joinBtn">코드로 참가 (게스트)</button>'+
     '</div>';
   el('aiBtn').addEventListener('click', ()=>{ mode='ai'; resetAIGame(); requestLock(); });
-  el('vsbotBtn').addEventListener('click', startVsBotMatch);
   el('hostBtn').addEventListener('click', ()=>{ mode='pvp'; isHost=true; showHostSetupScreen(); });
   el('joinBtn').addEventListener('click', ()=>{ mode='pvp'; isHost=false; showGuestSetupScreen(); });
 }
@@ -1291,17 +1014,15 @@ function animate(){
 
   if(gameState==='playing'){
     updateMovement(dt);
-    resolveVertical(dt);
     if(mode==='ai'){ updateEnemies(dt); }
     else if(mode==='pvp'){ updateOpponentAvatar(dt); }
-    else if(mode==='vsbot'){ updateBot(dt); }
     updateCrates(dt);
   } else if(gameState==='waitingForOpponentReady' && mode==='pvp'){
     updateOpponentAvatar(dt);
   }
   updateTracers(dt);
 
-  camera.position.set(player.pos.x, player.pos.y + player.eyeHeight, player.pos.z);
+  camera.position.set(player.pos.x, player.eyeHeight, player.pos.z);
   camera.rotation.y = player.yaw;
   camera.rotation.x = player.pitch;
 
