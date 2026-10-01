@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>저격전: Sniper Duel PvP</title>
 <style>
   :root{
@@ -108,6 +108,32 @@
   .statusMsg{font-size:13px;color:var(--accent2);margin-top:10px;min-height:16px;}
   .statusMsg.err{color:var(--danger);}
   .backLink{display:block;margin-top:14px;font-size:12px;color:var(--text-dim);cursor:pointer;text-decoration:underline;}
+
+  /* ---------- Mobile touch controls ---------- */
+  #mobileControls{display:none; position:fixed; inset:0; z-index:15;}
+  body.mobile-mode #mobileControls{display:block;}
+  body.mobile-mode #crosshair{display:none;}
+  #lookZone{position:absolute; inset:0; z-index:1; touch-action:none;}
+  #joystickBase{position:absolute; left:20px; bottom:max(20px, env(safe-area-inset-bottom,0px));
+    width:120px; height:120px; border-radius:50%; background:rgba(232,228,211,0.10);
+    border:2px solid rgba(232,228,211,0.3); z-index:5; touch-action:none;}
+  #joystickKnob{position:absolute; left:50%; top:50%; width:52px; height:52px; margin:-26px 0 0 -26px;
+    border-radius:50%; background:rgba(201,162,39,0.55); border:2px solid rgba(232,228,211,0.6);}
+  .mbtn{position:absolute; border-radius:50%; background:rgba(12,15,10,0.65); border:2px solid var(--line);
+    color:var(--text); font-size:12px; font-weight:700; z-index:6; touch-action:none;
+    -webkit-user-select:none; user-select:none; display:flex; align-items:center; justify-content:center;}
+  #btnFire{right:20px; bottom:max(20px, env(safe-area-inset-bottom,0px)); width:76px; height:76px;
+    background:rgba(194,59,59,0.35); border-color:var(--danger); font-size:14px;}
+  #btnJump{right:106px; bottom:max(20px, env(safe-area-inset-bottom,0px)); width:58px; height:58px;}
+  #btnAim{right:20px; bottom:110px; width:58px; height:58px;}
+  #btnAim.on{background:rgba(201,162,39,0.5); border-color:var(--accent);}
+  #btnReload{right:106px; bottom:110px; width:50px; height:50px; font-size:11px;}
+  #btnPauseMobile{left:16px; top:max(16px, env(safe-area-inset-top,0px)); width:40px; height:40px; font-size:18px;}
+
+  body.mobile-mode #healthBox{bottom:calc(env(safe-area-inset-bottom,0px) + 158px); width:160px;}
+  body.mobile-mode #ammoBox{bottom:calc(env(safe-area-inset-bottom,0px) + 180px); min-width:110px;}
+  body.mobile-mode .hud-panel{padding:7px 10px;}
+  body.mobile-mode #scoreBox, body.mobile-mode #waveBox{font-size:11px;}
 </style>
 </head>
 <body>
@@ -159,12 +185,25 @@
 
 <div id="damageVignette"></div>
 
+<div id="mobileControls">
+  <div id="lookZone"></div>
+  <div id="joystickBase"><div id="joystickKnob"></div></div>
+  <button id="btnPauseMobile" class="mbtn">≡</button>
+  <button id="btnJump" class="mbtn">점프</button>
+  <button id="btnReload" class="mbtn">장전</button>
+  <button id="btnAim" class="mbtn">조준</button>
+  <button id="btnFire" class="mbtn">발사</button>
+</div>
+
 <div id="blocker"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
 "use strict";
+
+const isMobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+if(isMobile) document.body.classList.add('mobile-mode');
 
 /* ============================================================
    Three.js base setup
@@ -613,8 +652,19 @@ document.body.addEventListener('contextmenu', e=>e.preventDefault());
 const blocker = el('blocker');
 
 function requestLock(){
+  if(isMobile){
+    pointerLocked = true;
+    blocker.classList.add('hidden');
+    return;
+  }
   document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
   try{ document.body.requestPointerLock(); }catch(e){}
+}
+
+function setAiming(v){
+  isAiming = v;
+  if(v){ el('crosshair').classList.add('hidden'); el('scope').classList.add('active'); }
+  else { el('crosshair').classList.remove('hidden'); el('scope').classList.remove('active'); }
 }
 
 document.addEventListener('pointerlockchange', ()=>{
@@ -641,7 +691,7 @@ document.addEventListener('pointerlockerror', ()=>{
 });
 
 document.addEventListener('mousemove', e=>{
-  if(!pointerLocked || (gameState!=='playing' && gameState!=='waitingForOpponentReady')) return;
+  if(!pointerLocked || isMobile || (gameState!=='playing' && gameState!=='waitingForOpponentReady')) return;
   const sens = isAiming ? 0.0009 : 0.0022;
   player.yaw -= e.movementX * sens;
   player.pitch -= e.movementY * sens;
@@ -650,13 +700,116 @@ document.addEventListener('mousemove', e=>{
 });
 
 document.addEventListener('mousedown', e=>{
-  if(!pointerLocked || gameState!=='playing') return;
+  if(isMobile || !pointerLocked || gameState!=='playing') return;
   if(e.button===0) shoot();
-  if(e.button===2){ isAiming=true; el('crosshair').classList.add('hidden'); el('scope').classList.add('active'); }
+  if(e.button===2) setAiming(true);
 });
 document.addEventListener('mouseup', e=>{
-  if(e.button===2){ isAiming=false; el('crosshair').classList.remove('hidden'); el('scope').classList.remove('active'); }
+  if(isMobile) return;
+  if(e.button===2) setAiming(false);
 });
+
+/* ============================================================
+   Mobile touch controls (virtual joystick + drag-look + buttons)
+   ============================================================ */
+const joystick = {active:false, id:null, cx:0, cy:0, dx:0, dz:0};
+const lookTouch = {active:false, id:null, lastX:0, lastY:0};
+
+if(isMobile){
+  const joyBase = el('joystickBase');
+  const joyKnob = el('joystickKnob');
+  const JOY_RADIUS = 45;
+
+  joyBase.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const rect = joyBase.getBoundingClientRect();
+    joystick.active = true;
+    joystick.id = t.identifier;
+    joystick.cx = rect.left + rect.width/2;
+    joystick.cy = rect.top + rect.height/2;
+  }, {passive:false});
+
+  document.addEventListener('touchmove', e=>{
+    for(const t of e.changedTouches){
+      if(joystick.active && t.identifier===joystick.id){
+        e.preventDefault();
+        let dx = t.clientX - joystick.cx, dy = t.clientY - joystick.cy;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        if(dist > JOY_RADIUS){ dx = dx/dist*JOY_RADIUS; dy = dy/dist*JOY_RADIUS; }
+        joyKnob.style.transform = 'translate('+dx+'px,'+dy+'px)';
+        const mag = Math.min(1, dist/JOY_RADIUS);
+        const nx = dx/JOY_RADIUS, ny = dy/JOY_RADIUS;
+        joystick.dx = Math.abs(nx)>0.12 ? nx*mag : 0;
+        joystick.dz = Math.abs(ny)>0.12 ? ny*mag : 0;
+      }
+      if(lookTouch.active && t.identifier===lookTouch.id){
+        if(gameState==='playing' || gameState==='waitingForOpponentReady'){
+          const dx = t.clientX - lookTouch.lastX, dy = t.clientY - lookTouch.lastY;
+          const sens = isAiming ? 0.0013 : 0.0028;
+          player.yaw -= dx*sens;
+          player.pitch -= dy*sens;
+          const lim = Math.PI/2 - 0.02;
+          player.pitch = Math.max(-lim, Math.min(lim, player.pitch));
+        }
+        lookTouch.lastX = t.clientX; lookTouch.lastY = t.clientY;
+      }
+    }
+  }, {passive:false});
+
+  function endTouch(e){
+    for(const t of e.changedTouches){
+      if(joystick.active && t.identifier===joystick.id){
+        joystick.active=false; joystick.id=null; joystick.dx=0; joystick.dz=0;
+        joyKnob.style.transform = 'translate(0px,0px)';
+      }
+      if(lookTouch.active && t.identifier===lookTouch.id){
+        lookTouch.active=false; lookTouch.id=null;
+      }
+    }
+  }
+  document.addEventListener('touchend', endTouch);
+  document.addEventListener('touchcancel', endTouch);
+
+  el('lookZone').addEventListener('touchstart', e=>{
+    if(gameState!=='playing' && gameState!=='waitingForOpponentReady') return;
+    if(lookTouch.active) return;
+    const t = e.changedTouches[0];
+    lookTouch.active = true;
+    lookTouch.id = t.identifier;
+    lookTouch.lastX = t.clientX; lookTouch.lastY = t.clientY;
+  }, {passive:true});
+
+  el('btnFire').addEventListener('touchstart', e=>{
+    e.preventDefault();
+    if(gameState==='playing') shoot();
+  }, {passive:false});
+
+  el('btnJump').addEventListener('touchstart', e=>{
+    e.preventDefault();
+    if(gameState==='playing') tryJump();
+  }, {passive:false});
+
+  el('btnReload').addEventListener('touchstart', e=>{
+    e.preventDefault();
+    tryReload();
+  }, {passive:false});
+
+  el('btnAim').addEventListener('touchstart', e=>{
+    e.preventDefault();
+    setAiming(!isAiming);
+    el('btnAim').classList.toggle('on', isAiming);
+  }, {passive:false});
+
+  el('btnPauseMobile').addEventListener('touchstart', e=>{
+    e.preventDefault();
+    if(gameState==='playing' || gameState==='waitingForOpponentReady'){
+      prePauseState = gameState;
+      gameState='paused';
+      showPauseScreen();
+    }
+  }, {passive:false});
+}
 
 /* ============================================================
    Shooting
@@ -833,9 +986,10 @@ function updateMovement(dt){
   if(keys['KeyS']) moveZ += 1;
   if(keys['KeyA']) moveX -= 1;
   if(keys['KeyD']) moveX += 1;
+  if(isMobile){ moveX += joystick.dx; moveZ += joystick.dz; }
   if(moveX===0 && moveZ===0) return;
   const len = Math.sqrt(moveX*moveX+moveZ*moveZ);
-  moveX/=len; moveZ/=len;
+  if(len > 1){ moveX/=len; moveZ/=len; }
   const sinY=Math.sin(player.yaw), cosY=Math.cos(player.yaw);
   const worldX = moveX*cosY + moveZ*sinY;
   const worldZ = -moveX*sinY + moveZ*cosY;
@@ -1178,8 +1332,13 @@ function showMainMenu(){
       '<h1>저격전 : SNIPER DUEL</h1>'+
       '<div class="sub">엄폐 저격 대결 게임</div>'+
       '<div class="rules">'+
-        '<b>WASD</b> 이동 · <b>마우스</b> 시점 회전<br>'+
-        '<b>좌클릭</b> 발사 · <b>우클릭(누르기)</b> 스코프 조준 · <b>R</b> 재장전 · <b>스페이스바</b> 점프<br>'+
+        (isMobile ?
+          '왼쪽 <b>가상 조이스틱</b>으로 이동 · 화면 오른쪽을 <b>드래그</b>해서 시점 회전<br>'+
+          '오른쪽 아래 <b>발사/점프/조준/장전</b> 버튼 사용<br>'
+        :
+          '<b>WASD</b> 이동 · <b>마우스</b> 시점 회전<br>'+
+          '<b>좌클릭</b> 발사 · <b>우클릭(누르기)</b> 스코프 조준 · <b>R</b> 재장전 · <b>스페이스바</b> 점프<br>'
+        )+
         '<b>헤드샷</b>은 즉사, 몸통은 여러 발이 필요합니다.<br>'+
         '갈색 구조물(계단탑, 상자)은 점프해서 올라갈 수 있는 고지대예요.<br><br>'+
         '<b>대결(PvP)</b>은 서버 없이 친구와 1:1로 직접 연결하는 방식이라, '+
